@@ -49,17 +49,17 @@ const int EEPROMsize = E2END;
 const int buflen = 17;  // Length of longest symbol + 1
 enum type {ZERO, SYMBOL, NUMBER, STREAM, PAIR };
 enum token { UNUSED, BRA, KET, QUO, DOT };
-enum stream { SERIALSTREAM, I2CSTREAM};
+enum stream { SERIALSTREAM };
 
 enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE, SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR,
-SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, WITHI2C, TAIL_FORMS, PROGN,
+SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, TAIL_FORMS, PROGN,
 RETURN, IF, COND, WHEN, UNLESS, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM, LISTP, CONSP, NUMBERP,
 STREAMP, EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
 LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
 MAPCAR, ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN, NUMEQ, LESS,
 LESSEQ, GREATER, GREATEREQ, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR, LOGXOR, LOGNOT,
 ASH, LOGBITP, READ, EVAL, GLOBALS, LOCALS, MAKUNBOUND, BREAK, PRINT, PRINC, WRITEBYTE, READBYTE,
-RESTARTI2C, GC, SAVEIMAGE, LOADIMAGE, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD, ANALOGWRITE,
+GC, SAVEIMAGE, LOADIMAGE, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD, ANALOGWRITE,
 DELAY, MILLIS, NOTE, ENDFUNCTIONS };
 
 // Typedefs
@@ -97,7 +97,6 @@ unsigned int freespace = 0;
 char ReturnFlag = 0;
 object *freelist;
 extern uint8_t _end;
-int i2cCount;
 
 object *GlobalEnv;
 object *GCStack = NULL;
@@ -510,73 +509,6 @@ inline object *cdrx (object *arg) {
   return cdr(arg);
 }
 
-// I2C interface
-
-#if defined(__AVR_ATmega328P__)   || defined(__AVR_ATmega168__)
-uint8_t const TWI_SDA_PIN = 18;
-uint8_t const TWI_SCL_PIN = 19;
-#elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-uint8_t const TWI_SDA_PIN = 20;
-uint8_t const TWI_SCL_PIN = 21;
-#elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
-uint8_t const TWI_SDA_PIN = 17;
-uint8_t const TWI_SCL_PIN = 16;
-#elif defined(__AVR_ATmega32U4__)
-uint8_t const TWI_SDA_PIN = 6;
-uint8_t const TWI_SCL_PIN = 5;
-#endif
-
-uint32_t const F_TWI = 400000L;  // Hardware I2C clock in Hz
-uint8_t const TWSR_MTX_DATA_ACK = 0x28;
-uint8_t const TWSR_MTX_ADR_ACK = 0x18;
-uint8_t const TWSR_MRX_ADR_ACK = 0x40;
-uint8_t const TWSR_START = 0x08;
-uint8_t const TWSR_REP_START = 0x10;
-uint8_t const I2C_READ = 1;
-uint8_t const I2C_WRITE = 0;
-
-void I2Cinit(bool enablePullup) {
-  TWSR = 0;                        // no prescaler
-  TWBR = (F_CPU/F_TWI - 16)/2;     // set bit rate factor
-  if (enablePullup) {
-    digitalWrite(TWI_SDA_PIN, HIGH);
-    digitalWrite(TWI_SCL_PIN, HIGH);
-  }
-}
-
-uint8_t I2Cread(uint8_t last) {
-  TWCR = 1<<TWINT | 1<<TWEN | (last ? 0 : (1<<TWEA));
-  while (!(TWCR & 1<<TWINT));
-  return TWDR;
-}
-
-bool I2Cwrite(uint8_t data) {
-  TWDR = data;
-  TWCR = 1<<TWINT | 1 << TWEN;
-  while (!(TWCR & 1<<TWINT));
-  return (TWSR & 0xF8) == TWSR_MTX_DATA_ACK;
-}
-
-bool I2Cstart(uint8_t addressRW) {
-  TWCR = 1<<TWINT | 1<<TWSTA | 1<<TWEN;    // send START condition
-  while (!(TWCR & 1<<TWINT));
-  if ((TWSR & 0xF8) != TWSR_START && (TWSR & 0xF8) != TWSR_REP_START) return false;
-  TWDR = addressRW;  // send device address and direction
-  TWCR = 1<<TWINT | 1<<TWEN;
-  while (!(TWCR & 1<<TWINT));
-  if (addressRW & I2C_READ) return (TWSR & 0xF8) == TWSR_MRX_ADR_ACK;
-  else return (TWSR & 0xF8) == TWSR_MTX_ADR_ACK;
-}
-
-bool I2Crestart(uint8_t addressRW) {
-  return I2Cstart(addressRW);
-}
-
-void I2Cstop(void) {
-  TWCR = 1<<TWINT | 1<<TWEN | 1<<TWSTO;
-  while (TWCR & 1<<TWSTO); // wait until stop and bus released
-}
-
 // Special forms
 
 object *sp_quote (object *args, object *env) {
@@ -731,27 +663,6 @@ object *sp_formillis (object *args, object *env) {
   do now = millis() - start; while (now < total);
   if (now <= 32767) return number(now);
   return nil;
-}
-
-object *sp_withi2c (object *args, object *env) {
-  object *params = first(args);
-  object *var = first(params);
-  int address = integer(eval(second(params), env));
-  params = cddr(params);
-  int read = 0; // Write
-  i2cCount = 0;
-  if (params != NULL) {
-    object *rw = eval(first(params), env);
-    if (numberp(rw)) i2cCount = integer(rw);
-    read = (rw != NULL);
-  }
-  I2Cinit(1); // Pullups
-  object *pair = cons(var, (I2Cstart(address<<1 | read)) ? stream(I2CSTREAM, address) : nil);
-  push(pair,env);
-  object *forms = cdr(args);
-  object *result = eval(tf_progn(forms,env), env);
-  I2Cstop();
-  return result;
 }
 
 // Tail-recursive forms
@@ -1439,8 +1350,7 @@ object *fn_writebyte (object *args, object *env) {
   int stream = SERIALSTREAM<<8;
   args = cdr(args);
   if (args != NULL) stream = istream(first(args));
-  if (stream>>8 == I2CSTREAM) return (I2Cwrite(value)) ? tee : nil;
-  else if (stream == SERIALSTREAM<<8) Serial.write(value);
+  if (stream == SERIALSTREAM<<8) Serial.write(value);
   else error(F("'write-byte' unknown stream type"));
   return nil;
 }
@@ -1452,31 +1362,9 @@ object *fn_readbyte (object *args, object *env) {
   if (args != NULL) stream = istream(first(args));
   args = cdr(args);
   if (args != NULL) last = (first(args) != NULL);
-  if (stream>>8 == I2CSTREAM) {
-    if (i2cCount >= 0) i2cCount--;
-    return number(I2Cread((i2cCount == 0) || last));
-  } else if (stream == SERIALSTREAM<<8) return number(Serial.read());
+  if (stream == SERIALSTREAM<<8) return number(Serial.read());
   else error(F("'read-byte' unknown stream type"));
   return nil;
-}
-
-object *fn_restarti2c (object *args, object *env) {
-  (void) env;
-  int stream = first(args)->integer;
-  args = cdr(args);
-  int read = 0; // Write
-  i2cCount = 0;
-  if (args != NULL) {
-    object *rw = first(args);
-    if (numberp(rw)) i2cCount = integer(rw);
-    read = (rw != NULL);
-  }
-  int address = stream & 0xFF;
-  if (stream>>8 == I2CSTREAM) {
-    if (!I2Crestart(address<<1 | read)) error(F("'i2c-restart' failed"));
-  }
-  else error(F("'restart' not i2c"));
-  return tee;
 }
 
 object *fn_gc (object *obj, object *env) {
@@ -1658,7 +1546,6 @@ const char string17[] PROGMEM = "setf";
 const char string18[] PROGMEM = "dolist";
 const char string19[] PROGMEM = "dotimes";
 const char string20[] PROGMEM = "for-millis";
-const char string21[] PROGMEM = "with-i2c";
 const char string23[] PROGMEM = "tail_forms";
 const char string24[] PROGMEM = "progn";
 const char string25[] PROGMEM = "return";
@@ -1733,7 +1620,6 @@ const char string105[] PROGMEM = "print";
 const char string106[] PROGMEM = "princ";
 const char string107[] PROGMEM = "write-byte";
 const char string108[] PROGMEM = "read-byte";
-const char string109[] PROGMEM = "restart-i2c";
 const char string110[] PROGMEM = "gc";
 const char string111[] PROGMEM = "save-image";
 const char string112[] PROGMEM = "load-image";
@@ -1768,7 +1654,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string18, sp_dolist, 1, 127 },
   { string19, sp_dotimes, 1, 127 },
   { string20, sp_formillis, 1, 127 },
-  { string21, sp_withi2c, 1, 127 },
   { string23, NULL, NIL, NIL },
   { string24, tf_progn, 0, 127 },
   { string25, tf_return, 0, 127 },
@@ -1841,7 +1726,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string106, fn_princ, 1, 1 },
   { string107, fn_writebyte, 1, 2 },
   { string108, fn_readbyte, 0, 2 },
-  { string109, fn_restarti2c, 1, 2 },
   { string110, fn_gc, 0, 0 },
   { string111, fn_saveimage, 0, 1 },
   { string112, fn_loadimage, 0, 0 },
@@ -2035,8 +1919,7 @@ void printobject(object *form){
     Serial.print(name(form));
   } else if (form->type == STREAM) {
     Serial.print(F("<"));
-    if ((form->integer)>>8 == I2CSTREAM) Serial.print(F("i2c"));
-    else Serial.print(F("serial"));
+    Serial.print(F("serial"));
     Serial.print(F("-stream #x"));
     Serial.print(form->integer & 0xFF, HEX);
     Serial.print('>');
