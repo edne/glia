@@ -27,7 +27,6 @@
 #define pop(y)             ((y) = cdr(y))
 
 #define numberp(x)         ((x)->type == NUMBER)
-#define streamp(x)         ((x)->type == STREAM)
 #define listp(x)           ((x) == NULL || (x)->type >= PAIR || (x)->type == ZERO)
 #define consp(x)           (((x)->type >= PAIR || (x)->type == ZERO) && (x) != NULL)
 
@@ -47,14 +46,13 @@ const int workspacesize = (RAMsize - RAMsize/4 - 268)/4;
 const int EEPROMsize = E2END;
 
 const int buflen = 17;  // Length of longest symbol + 1
-enum type {ZERO, SYMBOL, NUMBER, STREAM, PAIR };
+enum type {ZERO, SYMBOL, NUMBER, PAIR };
 enum token { UNUSED, BRA, KET, QUO, DOT };
-enum stream { SERIALSTREAM };
 
 enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE, SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR,
 SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, TAIL_FORMS, PROGN,
 RETURN, IF, COND, WHEN, UNLESS, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM, LISTP, CONSP, NUMBERP,
-STREAMP, EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
+EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
 LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
 MAPCAR, ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN, NUMEQ, LESS,
 LESSEQ, GREATER, GREATEREQ, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR, LOGXOR, LOGNOT,
@@ -162,13 +160,6 @@ object *symbol (unsigned int name) {
   object *ptr = (object *) myalloc ();
   ptr->type = SYMBOL;
   ptr->name = name;
-  return ptr;
-}
-
-object *stream (unsigned char streamtype, unsigned char address) {
-  object *ptr = (object *) myalloc ();
-  ptr->type = STREAM;
-  ptr->integer = streamtype<<8 | address;
   return ptr;
 }
 
@@ -283,11 +274,6 @@ char *name(object *obj){
 
 int integer(object *obj){
   if(obj->type != NUMBER) error(F("not a number"));
-  return obj->integer;
-}
-
-int istream(object *obj){
-  if(obj->type != STREAM) error(F("not a stream"));
   return obj->integer;
 }
 
@@ -691,12 +677,6 @@ object *fn_numberp (object *args, object *env) {
   (void) env;
   object *arg1 = first(args);
   return numberp(arg1) ? tee : nil;
-}
-
-object *fn_streamp (object *args, object *env) {
-  (void) env;
-  object *arg1 = first(args);
-  return streamp(arg1) ? tee : nil;
 }
 
 object *fn_eq (object *args, object *env) {
@@ -1267,30 +1247,6 @@ object *fn_princ (object *args, object *env) {
   return obj;
 }
 
-object *fn_writebyte (object *args, object *env) {
-  (void) env;
-  object *val = first(args);
-  int value = integer(val);
-  int stream = SERIALSTREAM<<8;
-  args = cdr(args);
-  if (args != NULL) stream = istream(first(args));
-  if (stream == SERIALSTREAM<<8) Serial.write(value);
-  else error(F("'write-byte' unknown stream type"));
-  return nil;
-}
-
-object *fn_readbyte (object *args, object *env) {
-  (void) env;
-  int stream = SERIALSTREAM<<8;
-  int last = 0;
-  if (args != NULL) stream = istream(first(args));
-  args = cdr(args);
-  if (args != NULL) last = (first(args) != NULL);
-  if (stream == SERIALSTREAM<<8) return number(Serial.read());
-  else error(F("'read-byte' unknown stream type"));
-  return nil;
-}
-
 object *fn_gc (object *obj, object *env) {
   unsigned long start = micros();
   int initial = freespace;
@@ -1476,7 +1432,6 @@ const char string36[] PROGMEM = "atom";
 const char string37[] PROGMEM = "listp";
 const char string38[] PROGMEM = "consp";
 const char string39[] PROGMEM = "numberp";
-const char string40[] PROGMEM = "streamp";
 const char string41[] PROGMEM = "eq";
 const char string42[] PROGMEM = "car";
 const char string43[] PROGMEM = "first";
@@ -1531,11 +1486,7 @@ const char string103[] PROGMEM = "makunbound";
 const char string104[] PROGMEM = "break";
 const char string105[] PROGMEM = "print";
 const char string106[] PROGMEM = "princ";
-const char string107[] PROGMEM = "write-byte";
-const char string108[] PROGMEM = "read-byte";
 const char string110[] PROGMEM = "gc";
-const char string111[] PROGMEM = "save-image";
-const char string112[] PROGMEM = "load-image";
 const char string113[] PROGMEM = "pinmode";
 const char string114[] PROGMEM = "digitalread";
 const char string115[] PROGMEM = "digitalwrite";
@@ -1584,7 +1535,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string37, fn_listp, 1, 1 },
   { string38, fn_consp, 1, 1 },
   { string39, fn_numberp, 1, 1 },
-  { string40, fn_streamp, 1, 1 },
   { string41, fn_eq, 2, 2 },
   { string42, fn_car, 1, 1 },
   { string43, fn_car, 1, 1 },
@@ -1637,8 +1587,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string104, fn_break, 0, 0 },
   { string105, fn_print, 1, 1 },
   { string106, fn_princ, 1, 1 },
-  { string107, fn_writebyte, 1, 2 },
-  { string108, fn_readbyte, 0, 2 },
   { string110, fn_gc, 0, 0 },
   { string113, fn_pinmode, 2, 2 },
   { string114, fn_digitalread, 1, 1 },
@@ -1828,12 +1776,6 @@ void printobject(object *form){
     Serial.print(integer(form));
   } else if (form->type == SYMBOL) {
     Serial.print(name(form));
-  } else if (form->type == STREAM) {
-    Serial.print(F("<"));
-    Serial.print(F("serial"));
-    Serial.print(F("-stream #x"));
-    Serial.print(form->integer & 0xFF, HEX);
-    Serial.print('>');
   } else
     error(F("Error in print."));
 }
