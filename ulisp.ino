@@ -5,7 +5,6 @@
 */
 
 #include <setjmp.h>
-#include <SPI.h>
 
 // Compile options
 
@@ -50,10 +49,10 @@ const int EEPROMsize = E2END;
 const int buflen = 17;  // Length of longest symbol + 1
 enum type {ZERO, SYMBOL, NUMBER, STREAM, PAIR };
 enum token { UNUSED, BRA, KET, QUO, DOT };
-enum stream { SERIALSTREAM, I2CSTREAM, SPISTREAM };
+enum stream { SERIALSTREAM, I2CSTREAM};
 
 enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE, SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR,
-SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, WITHI2C, WITHSPI, TAIL_FORMS, PROGN,
+SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, WITHI2C, TAIL_FORMS, PROGN,
 RETURN, IF, COND, WHEN, UNLESS, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM, LISTP, CONSP, NUMBERP,
 STREAMP, EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
 LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
@@ -755,40 +754,6 @@ object *sp_withi2c (object *args, object *env) {
   return result;
 }
 
-object *sp_withspi (object *args, object *env) {
-  object *params = first(args);
-  object *var = first(params);
-  int pin = integer(eval(second(params), env));
-  int divider = 0, mode = 0, bitorder = 1;
-  object *pair = cons(var, stream(SPISTREAM, pin));
-  push(pair,env);
-  SPI.begin();
-  params = cddr(params);
-  if (params != NULL) {
-    int d = integer(eval(first(params), env));
-    if (d<1 || d>7) error(F("'with-spi' invalid divider"));
-    if (d == 7) divider = 3;
-    else if (d & 1) divider = (d>>1) + 4;
-    else divider = (d>>1) - 1;
-    params = cdr(params);
-    if (params != NULL) {
-      bitorder = (eval(first(params), env) == NULL);
-      params = cdr(params);
-      if (params != NULL) mode = integer(eval(first(params), env));
-    }
-  }
-  pinMode(pin, OUTPUT);
-  digitalWrite(pin, LOW);
-  SPI.setBitOrder(bitorder);
-  SPI.setClockDivider(divider);
-  SPI.setDataMode(mode);
-  object *forms = cdr(args);
-  object *result = eval(tf_progn(forms,env), env);
-  digitalWrite(pin, HIGH);
-  SPI.end();
-  return result;
-}
-
 // Tail-recursive forms
 
 object *tf_progn (object *args, object *env) {
@@ -1475,7 +1440,6 @@ object *fn_writebyte (object *args, object *env) {
   args = cdr(args);
   if (args != NULL) stream = istream(first(args));
   if (stream>>8 == I2CSTREAM) return (I2Cwrite(value)) ? tee : nil;
-  else if (stream>>8 == SPISTREAM) return number(SPI.transfer(value));
   else if (stream == SERIALSTREAM<<8) Serial.write(value);
   else error(F("'write-byte' unknown stream type"));
   return nil;
@@ -1491,8 +1455,7 @@ object *fn_readbyte (object *args, object *env) {
   if (stream>>8 == I2CSTREAM) {
     if (i2cCount >= 0) i2cCount--;
     return number(I2Cread((i2cCount == 0) || last));
-  } else if (stream>>8 == SPISTREAM) return number(SPI.transfer(0));
-  else if (stream == SERIALSTREAM<<8) return number(Serial.read());
+  } else if (stream == SERIALSTREAM<<8) return number(Serial.read());
   else error(F("'read-byte' unknown stream type"));
   return nil;
 }
@@ -1696,7 +1659,6 @@ const char string18[] PROGMEM = "dolist";
 const char string19[] PROGMEM = "dotimes";
 const char string20[] PROGMEM = "for-millis";
 const char string21[] PROGMEM = "with-i2c";
-const char string22[] PROGMEM = "with-spi";
 const char string23[] PROGMEM = "tail_forms";
 const char string24[] PROGMEM = "progn";
 const char string25[] PROGMEM = "return";
@@ -1807,7 +1769,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string19, sp_dotimes, 1, 127 },
   { string20, sp_formillis, 1, 127 },
   { string21, sp_withi2c, 1, 127 },
-  { string22, sp_withspi, 1, 127 },
   { string23, NULL, NIL, NIL },
   { string24, tf_progn, 0, 127 },
   { string25, tf_return, 0, 127 },
@@ -2074,8 +2035,7 @@ void printobject(object *form){
     Serial.print(name(form));
   } else if (form->type == STREAM) {
     Serial.print(F("<"));
-    if ((form->integer)>>8 == SPISTREAM) Serial.print(F("spi"));
-    else if ((form->integer)>>8 == I2CSTREAM) Serial.print(F("i2c"));
+    if ((form->integer)>>8 == I2CSTREAM) Serial.print(F("i2c"));
     else Serial.print(F("serial"));
     Serial.print(F("-stream #x"));
     Serial.print(form->integer & 0xFF, HEX);
