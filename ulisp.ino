@@ -55,8 +55,8 @@ enum stream { SERIALSTREAM, I2CSTREAM, SPISTREAM };
 enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE, SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR,
 SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, WITHI2C, WITHSPI, TAIL_FORMS, PROGN,
 RETURN, IF, COND, WHEN, UNLESS, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM, LISTP, CONSP, NUMBERP,
-STREAMP, EQ, CAR, FIRST, CDR, REST, CAAR, CADR, SECOND, CDAR, CDDR, CAAAR, CAADR, CADAR, CADDR, THIRD,
-CDAAR, CDADR, CDDAR, CDDDR, LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
+STREAMP, EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
+LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
 MAPCAR, ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN, NUMEQ, LESS,
 LESSEQ, GREATER, GREATEREQ, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR, LOGXOR, LOGNOT,
 ASH, LOGBITP, READ, EVAL, GLOBALS, LOCALS, MAKUNBOUND, BREAK, PRINT, PRINC, WRITEBYTE, READBYTE,
@@ -918,66 +918,6 @@ object *fn_cdr (object *args, object *env) {
   return cdrx(first(args));
 }
 
-object *fn_caar (object *args, object *env) {
-  (void) env;
-  return carx(carx(first(args)));
-}
-
-object *fn_cadr (object *args, object *env) {
-  (void) env;
-  return carx(cdrx(first(args)));
-}
-
-object *fn_cdar (object *args, object *env) {
-  (void) env;
-  return cdrx(carx(first(args)));
-}
-
-object *fn_cddr (object *args, object *env) {
-  (void) env;
-  return cdrx(cdrx(first(args)));
-}
-
-object *fn_caaar (object *args, object *env) {
-  (void) env;
-  return carx(carx(carx(first(args))));
-}
-
-object *fn_caadr (object *args, object *env) {
-  (void) env;
-  return carx(carx(cdrx(first(args))));
-}
-
-object *fn_cadar (object *args, object *env) {
-  (void) env;
-  return carx(cdrx(carx(first(args))));
-}
-
-object *fn_caddr (object *args, object *env) {
-  (void) env;
-  return carx(cdrx(cdrx(first(args))));
-}
-
-object *fn_cdaar (object *args, object *env) {
-  (void) env;
-  return cdrx(carx(carx(first(args))));
-}
-
-object *fn_cdadr (object *args, object *env) {
-  (void) env;
-  return cdrx(carx(cdrx(first(args))));
-}
-
-object *fn_cddar (object *args, object *env) {
-  (void) env;
-  return cdrx(cdrx(carx(first(args))));
-}
-
-object *fn_cdddr (object *args, object *env) {
-  (void) env;
-  return cdrx(cdrx(cdrx(first(args))));
-}
-
 object *fn_length (object *args, object *env) {
   (void) env;
   object *list = first(args);
@@ -1780,20 +1720,8 @@ const char string42[] PROGMEM = "car";
 const char string43[] PROGMEM = "first";
 const char string44[] PROGMEM = "cdr";
 const char string45[] PROGMEM = "rest";
-const char string46[] PROGMEM = "caar";
-const char string47[] PROGMEM = "cadr";
 const char string48[] PROGMEM = "second";
-const char string49[] PROGMEM = "cdar";
-const char string50[] PROGMEM = "cddr";
-const char string51[] PROGMEM = "caaar";
-const char string52[] PROGMEM = "caadr";
-const char string53[] PROGMEM = "cadar";
-const char string54[] PROGMEM = "caddr";
 const char string55[] PROGMEM = "third";
-const char string56[] PROGMEM = "cdaar";
-const char string57[] PROGMEM = "cdadr";
-const char string58[] PROGMEM = "cddar";
-const char string59[] PROGMEM = "cdddr";
 const char string60[] PROGMEM = "length";
 const char string61[] PROGMEM = "list";
 const char string62[] PROGMEM = "reverse";
@@ -1903,20 +1831,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string43, fn_car, 1, 1 },
   { string44, fn_cdr, 1, 1 },
   { string45, fn_cdr, 1, 1 },
-  { string46, fn_caar, 1, 1 },
-  { string47, fn_cadr, 1, 1 },
-  { string48, fn_cadr, 1, 1 },
-  { string49, fn_cdar, 1, 1 },
-  { string50, fn_cddr, 1, 1 },
-  { string51, fn_caaar, 1, 1 },
-  { string52, fn_caadr, 1, 1 },
-  { string53, fn_cadar, 1, 1 },
-  { string54, fn_caddr, 1, 1 },
-  { string55, fn_caddr, 1, 1 },
-  { string56, fn_cdaar, 1, 1 },
-  { string57, fn_cdadr, 1, 1 },
-  { string58, fn_cddar, 1, 1 },
-  { string59, fn_cdddr, 1, 1 },
   { string60, fn_length, 1, 1 },
   { string61, fn_list, 0, 127 },
   { string62, fn_reverse, 1, 1 },
