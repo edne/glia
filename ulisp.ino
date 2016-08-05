@@ -513,7 +513,7 @@ inline object *cdrx (object *arg) {
 
 // I2C interface
 
-#if defined(__AVR_ATmega328P__)
+#if defined(__AVR_ATmega328P__)   || defined(__AVR_ATmega168__)
 uint8_t const TWI_SDA_PIN = 18;
 uint8_t const TWI_SCL_PIN = 19;
 #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
