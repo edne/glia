@@ -59,7 +59,7 @@ LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
 MAPCAR, ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN, NUMEQ, LESS,
 LESSEQ, GREATER, GREATEREQ, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR, LOGXOR, LOGNOT,
 ASH, LOGBITP, READ, EVAL, GLOBALS, LOCALS, MAKUNBOUND, BREAK, PRINT, PRINC, WRITEBYTE, READBYTE,
-GC, SAVEIMAGE, LOADIMAGE, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD, ANALOGWRITE,
+GC, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD, ANALOGWRITE,
 DELAY, MILLIS, NOTE, ENDFUNCTIONS };
 
 // Typedefs
@@ -220,82 +220,6 @@ void gc (object *form, object *env) {
   Serial.print(freespace - start);
   Serial.println('}');
   #endif
-}
-
-// Save-image and load-image
-
-typedef struct {
-  unsigned int eval;
-  unsigned int datasize;
-  unsigned int globalenv;
-  unsigned int tee;
-  char data[];
-} struct_image;
-
-struct_image EEMEM image;
-
-void movepointer (object *from, object *to) {
-  for (int i=0; i<workspacesize; i++) {
-    object *obj = &workspace[i];
-    int type = (obj->type) & 0x7FFF;
-    if (marked(obj) && type >= PAIR) {
-      if (car(obj) == (object *)((unsigned int)from | 0x8000)) 
-        car(obj) = (object *)((unsigned int)to | 0x8000);
-      if (cdr(obj) == from) cdr(obj) = to;
-    }
-  }
-}
-  
-int compactimage (object **arg) {
-  markobject(tee);
-  markobject(GlobalEnv);
-  markobject(GCStack);
-  object *firstfree = workspace;
-  while (marked(firstfree)) firstfree++;
-
-  for (int i=0; i<workspacesize; i++) {
-    object *obj = &workspace[i];
-    if (marked(obj) && firstfree < obj) {
-      car(firstfree) = car(obj);
-      cdr(firstfree) = cdr(obj);
-      unmark(obj);
-      movepointer(obj, firstfree);
-      if (GlobalEnv == obj) GlobalEnv = firstfree;
-      if (GCStack == obj) GCStack = firstfree;
-      if (tee == obj) tee = firstfree;
-      if (*arg == obj) *arg = firstfree;
-      while (marked(firstfree)) firstfree++;
-    }
-  }
-  sweep();
-  return firstfree - workspace;
-}
-  
-int saveimage (object *arg) {
-  unsigned int imagesize = compactimage(&arg);
-  // Save to EEPROM
-  if ((imagesize*4+8) > EEPROMsize) {
-    Serial.print(F("Error: Image size too large: "));
-    Serial.println(imagesize+2);
-    GCStack = NULL;
-    longjmp(exception, 1);
-  }
-  eeprom_write_word(&image.datasize, imagesize);
-  eeprom_write_word(&image.eval, (unsigned int)arg);
-  eeprom_write_word(&image.globalenv, (unsigned int)GlobalEnv);
-  eeprom_write_word(&image.tee, (unsigned int)tee);
-  eeprom_write_block(workspace, image.data, imagesize*4);
-  return imagesize+2;
-}
-
-int loadimage () {
-  unsigned int imagesize = eeprom_read_word(&image.datasize);
-  if (imagesize == 0 || imagesize == 0xFFFF) error(F("No saved image"));
-  GlobalEnv = (object *)eeprom_read_word(&image.globalenv);
-  tee = (object *)eeprom_read_word(&image.tee) ;
-  eeprom_read_block(workspace, image.data, imagesize*4);
-  gc(NULL, NULL);
-  return imagesize+2;
 }
 
 // Error handling
@@ -1379,17 +1303,6 @@ object *fn_gc (object *obj, object *env) {
   return nil;
 }
 
-object *fn_saveimage (object *args, object *env) {
-  object *var = eval(first(args), env);
-  return number(saveimage(var));
-}
-
-object *fn_loadimage (object *args, object *env) {
-  (void) args;
-  (void) env;
-  return number(loadimage());
-}
-
 // Arduino procedures
 
 object *fn_pinmode (object *args, object *env) {
@@ -1727,8 +1640,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string107, fn_writebyte, 1, 2 },
   { string108, fn_readbyte, 0, 2 },
   { string110, fn_gc, 0, 0 },
-  { string111, fn_saveimage, 0, 1 },
-  { string112, fn_loadimage, 0, 0 },
   { string113, fn_pinmode, 2, 2 },
   { string114, fn_digitalread, 1, 1 },
   { string115, fn_digitalwrite, 2, 2 },
@@ -2072,14 +1983,5 @@ void repl(object *env) {
 }
 
 void loop() {
-  if (!setjmp(exception)) {
-    #if defined(resetautorun)
-    object *autorun = (object *)eeprom_read_word(&image.eval);
-    if (autorun != NULL && (unsigned int)autorun != 0xFFFF) {
-      loadimage();
-      apply(autorun, NULL, NULL);
-    }
-    #endif
-  }
   repl(NULL);
 }
