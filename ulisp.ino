@@ -49,16 +49,15 @@ const int buflen = 17;  // Length of longest symbol + 1
 enum type {ZERO, SYMBOL, NUMBER, PAIR };
 enum token { UNUSED, BRA, KET, QUO, DOT };
 
-enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE, SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR,
-SETQ, LOOP, PUSH, POP, INCF, DECF, SETF, DOLIST, DOTIMES, FORMILLIS, TAIL_FORMS, PROGN,
-RETURN, IF, COND, WHEN, UNLESS, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM, LISTP, CONSP, NUMBERP,
-EQ, CAR, FIRST, CDR, REST, SECOND, THIRD,
-LENGTH, LIST, REVERSE, NTH, ASSOC, MEMBER, APPLY, FUNCALL, APPEND, MAPC,
-MAPCAR, ADD, SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN, NUMEQ, LESS,
-LESSEQ, GREATER, GREATEREQ, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR, LOGXOR, LOGNOT,
-ASH, LOGBITP, READ, EVAL, GLOBALS, LOCALS, MAKUNBOUND, BREAK, PRINT, PRINC, WRITEBYTE, READBYTE,
-GC, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD, ANALOGWRITE,
-DELAY, MILLIS, NOTE, ENDFUNCTIONS };
+enum function { SYMBOLS, NIL, TEE, LAMBDA, LET, LETSTAR, CLOSURE,
+SPECIAL_FORMS, QUOTE, DEFUN, DEFVAR, SETQ, LOOP, PUSH, POP, DOTIMES, FORMILLIS,
+TAIL_FORMS, PROGN, RETURN, COND, AND, OR, FUNCTIONS, NOT, NULLFN, CONS, ATOM,
+LISTP, CONSP, NUMBERP, EQ, CAR, CDR, LENGTH, LIST, APPLY, FUNCALL, ADD,
+SUBTRACT, MULTIPLY, DIVIDE, MOD, ONEPLUS, ONEMINUS, ABS, RANDOM, MAX, MIN,
+NUMEQ, LESS, GREATER, NOTEQ, PLUSP, MINUSP, ZEROP, ODDP, EVENP, LOGAND, LOGIOR,
+LOGXOR, LOGNOT, LOGBITP, READ, EVAL, GLOBALS, LOCALS, MAKUNBOUND, BREAK, PRINT,
+PRINC, WRITEBYTE, READBYTE, GC, PINMODE, DIGITALREAD, DIGITALWRITE, ANALOGREAD,
+ANALOGWRITE, DELAY, MILLIS, NOTE, ENDFUNCTIONS };
 
 // Typedefs
 
@@ -380,26 +379,15 @@ object *apply (object *function, object *args, object **env) {
 object **place (object *args, object *env) {
   if (!consp(args)) return &cdr(findvalue(args, env));
   object* function = first(args);
-  if (issymbol(function, CAR) || issymbol(function, FIRST)) {
+  if (issymbol(function, CAR)) {
     object *value = eval(second(args), env);
     if (!listp(value)) error(F("Can't take car"));
     return &car(value);
   }
-  if (issymbol(function, CDR) || issymbol(function, REST)) {
+  if (issymbol(function, CDR)) {
     object *value = eval(second(args), env);
     if (!listp(value)) error(F("Can't take cdr"));
     return &cdr(value);
-  }
-  if (issymbol(function, NTH)) {
-    int index = integer(eval(second(args), env));
-    object *list = eval(third(args), env);
-    if (!consp(list)) error(F("'nth' second argument is not a list"));
-    while (index > 0) {
-      list = cdr(list);
-      if (list == NULL) error(F("'nth' index out of range"));
-      index--;
-    }
-    return &car(list);
   }
   error(F("Illegal place"));
   return nil;
@@ -485,63 +473,11 @@ object *sp_pop (object *args, object *env) {
   return result;
 }
 
-object *sp_incf (object *args, object *env) {
-  object **loc = place(first(args), env);
-  int increment = 1;
-  int result = integer(*loc);
-  args = cdr(args);
-  if (args != NULL) increment = integer(eval(first(args), env));
-  #if defined(checkoverflow)
-  if (increment < 1) { if (-32768 - increment > result) error(F("'incf' arithmetic overflow")); }
-  else { if (32767 - increment < result) error(F("'incf' arithmetic overflow")); }
-  #endif
-  result = result + increment;
-  *loc = number(result);
-  return *loc;
-}
-
-object *sp_decf (object *args, object *env) {
-  object **loc = place(first(args), env);
-  int decrement = 1;
-  int result = integer(*loc);
-  args = cdr(args);
-  if (args != NULL) decrement = integer(eval(first(args), env));
-  #if defined(checkoverflow)
-  if (decrement < 1) { if (32767 + decrement < result) error(F("'decf' arithmetic overflow")); }
-  else { if (-32768 + decrement > result) error(F("'decf' arithmetic overflow")); }
-  #endif
-  result = result - decrement;
-  *loc = number(result);
-  return *loc;
-}
-
 object *sp_setf (object *args, object *env) {
   object **loc = place(first(args), env);
   object *result = eval(second(args), env);
   *loc = result;
   return result;
-}
-
-object *sp_dolist (object *args, object *env) {
-  object *params = first(args);
-  object *var = first(params);
-  object *result = nil;
-  object *list = eval(second(params), env);
-  if (!listp(list)) error(F("'dolist' argument is not a list"));
-  push(list, GCStack); // Don't GC the list
-  object *pair = cons(var,nil);
-  push(pair,env);
-  params = cdr(cdr(params));
-  if (params != NULL) result = car(params);
-  object *forms = cdr(args);
-  while (list != NULL) {
-    cdr(pair) = first(list);
-    list = cdr(list);
-    eval(tf_progn(forms,env), env);
-  }
-  cdr(pair) = nil;
-  pop(GCStack);
-  return eval(result, env);
 }
 
 object *sp_dotimes (object *args, object *env) {
@@ -593,11 +529,6 @@ object *tf_return (object *args, object *env) {
   return tf_progn(args, env);
 }
 
-object *tf_if (object *args, object *env) {
-  if (eval(first(args), env) != nil) return second(args);
-  return third(args);
-}
-
 object *tf_cond (object *args, object *env) {
   while (args != NULL) {
     object *clause = first(args);
@@ -609,16 +540,6 @@ object *tf_cond (object *args, object *env) {
     args = cdr(args);
   }
   return nil;
-}
-
-object *tf_when (object *args, object *env) {
-  if (eval(first(args), env) != nil) return tf_progn(cdr(args),env);
-  else return nil;
-}
-
-object *tf_unless (object *args, object *env) {
-  if (eval(first(args), env) != nil) return nil;
-  else return tf_progn(cdr(args),env);
 }
 
 object *tf_and (object *args, object *env) {
@@ -698,66 +619,9 @@ object *fn_cdr (object *args, object *env) {
   return cdrx(first(args));
 }
 
-object *fn_length (object *args, object *env) {
-  (void) env;
-  object *list = first(args);
-  if (!listp(list)) error(F("'length' argument is not a list"));
-  return number(listlength(list));
-}
-
 object *fn_list (object *args, object *env) {
   (void) env;
   return args;
-}
-
-object *fn_reverse (object *args, object *env) {
-  (void) env;
-  object *list = first(args);
-  if (!listp(list)) error(F("'reverse' argument is not a list"));
-  object *result = NULL;
-  while (list != NULL) {
-    push(first(list),result);
-    list = cdr(list);
-  }
-  return result;
-}
-
-object *fn_nth (object *args, object *env) {
-  (void) env;
-  int n = integer(first(args));
-  object *list = second(args);
-  if (!listp(list)) error(F("'nth' second argument is not a list"));
-  while (list != NULL) {
-    if (n == 0) return car(list);
-    list = cdr(list);
-    n--;
-  }
-  return nil;
-}
-
-object *fn_assoc (object *args, object *env) {
-  (void) env;
-  object *key = first(args);
-  object *list = second(args);
-  if (!listp(list)) error(F("'assoc' second argument is not a list"));
-  while (list != NULL) {
-    object *pair = first(list);
-    if (eq(key,car(pair))) return pair;
-    list = cdr(list);
-  }
-  return nil;
-}
-
-object *fn_member (object *args, object *env) {
-  (void) env;
-  object *item = first(args);
-  object *list = second(args);
-  if (!listp(list)) error(F("'member' second argument is not a list"));
-  while (list != NULL) {
-    if (eq(item,car(list))) return list;
-    list = cdr(list);
-  }
-  return nil;
 }
 
 object *fn_apply (object *args, object *env) {
@@ -774,93 +638,6 @@ object *fn_apply (object *args, object *env) {
 
 object *fn_funcall (object *args, object *env) {
   return apply(first(args), cdr(args), &env);
-}
-
-object *fn_append (object *args, object *env) {
-  (void) env;
-  object *head = NULL;
-  object *tail = NULL;
-  while (args != NULL) {
-    object *list = first(args);
-    if (!listp(list)) error(F("'append' argument is not a list"));
-    while (list != NULL) {
-      object *obj = cons(first(list),NULL);
-      if (head == NULL) {
-        head = obj;
-        tail = obj;
-      } else {
-        cdr(tail) = obj;
-        tail = obj;
-      }
-      list = cdr(list);
-    }
-    args = cdr(args);
-  }
-  return head;
-}
-
-object *fn_mapc (object *args, object *env) {
-  object *function = first(args);
-  object *list1 = second(args);
-  object *result = list1;
-  if (!listp(list1)) error(F("'mapc' second argument is not a list"));
-  object *list2 = third(args);
-  if (!listp(list2)) error(F("'mapc' third argument is not a list"));
-  if (list2 != NULL) {
-    while (list1 != NULL && list2 != NULL) {
-      apply(function, cons(car(list1),cons(car(list2),NULL)), &env);
-      list1 = cdr(list1);
-      list2 = cdr(list2);
-    }
-  } else {
-    while (list1 != NULL) {
-      apply(function, cons(car(list1),NULL), &env);
-      list1 = cdr(list1);
-    }
-  }
-  return result;
-}
-
-object *fn_mapcar (object *args, object *env) {
-  object *function = first(args);
-  object *list1 = second(args);
-  if (!listp(list1)) error(F("'mapcar' second argument is not a list"));
-  object *list2 = third(args);
-  if (!listp(list2)) error(F("'mapcar' third argument is not a list"));
-  object *head = NULL;
-  object *tail = NULL;
-  if (list2 != NULL) {
-    while (list1 != NULL && list2 != NULL) {
-      object *result = apply(function, cons(car(list1),cons(car(list2),NULL)), &env);
-      object *obj = cons(result,NULL);
-      if (head == NULL) {
-        head = obj;
-        push(head,GCStack);
-        tail = obj;
-      } else {
-        cdr(tail) = obj;
-        tail = obj;
-      }
-      list1 = cdr(list1);
-      list2 = cdr(list2);
-    }
-  } else {
-    while (list1 != NULL) {
-      object *result = apply(function, cons(car(list1),NULL), &env);
-      object *obj = cons(result,NULL);
-      if (head == NULL) {
-        head = obj;
-        push(head,GCStack);
-        tail = obj;
-      } else {
-        cdr(tail) = obj;
-        tail = obj;
-      }
-      list1 = cdr(list1);
-    }
-  }
-  pop(GCStack);
-  return head;
 }
 
 // Arithmetic functions
@@ -1027,19 +804,6 @@ object *fn_less (object *args, object *env) {
   return tee;
 }
 
-object *fn_lesseq (object *args, object *env) {
-  (void) env;
-  int arg1 = integer(first(args));
-  args = cdr(args);
-  while (args != NULL) {
-    int arg2 = integer(first(args));
-    if (!(arg1 <= arg2)) return nil;
-    arg1 = arg2;
-    args = cdr(args);
-  }
-  return tee;
-}
-
 object *fn_greater (object *args, object *env) {
   (void) env;
   int arg1 = integer(first(args));
@@ -1048,35 +812,6 @@ object *fn_greater (object *args, object *env) {
     int arg2 = integer(first(args));
     if (!(arg1 > arg2)) return nil;
     arg1 = arg2;
-    args = cdr(args);
-  }
-  return tee;
-}
-
-object *fn_greatereq (object *args, object *env) {
-  (void) env;
-  int arg1 = integer(first(args));
-  args = cdr(args);
-  while (args != NULL) {
-    int arg2 = integer(first(args));
-    if (!(arg1 >= arg2)) return nil;
-    arg1 = arg2;
-    args = cdr(args);
-  }
-  return tee;
-}
-
-object *fn_noteq (object *args, object *env) {
-  (void) env;
-  while (args != NULL) {   
-    object *nargs = args;
-    int arg1 = integer(first(nargs));
-    nargs = cdr(nargs);
-    while (nargs != NULL) {
-       int arg2 = integer(first(nargs));
-       if (arg1 == arg2) return nil;
-       nargs = cdr(nargs);
-    }
     args = cdr(args);
   }
   return tee;
@@ -1153,16 +888,6 @@ object *fn_lognot (object *args, object *env) {
   (void) env;
   int result = integer(car(args));
   return number(~result);
-}
-
-object *fn_ash (object *args, object *env) {
-  (void) env;
-  int value = integer(first(args));
-  int count = integer(second(args));
-  if (count >= 0)
-    return number(value << count);
-  else
-    return number(value >> abs(count));
 }
 
 object *fn_logbitp (object *args, object *env) {
@@ -1412,7 +1137,6 @@ const char string14[] PROGMEM = "pop";
 const char string15[] PROGMEM = "incf";
 const char string16[] PROGMEM = "decf";
 const char string17[] PROGMEM = "setf";
-const char string18[] PROGMEM = "dolist";
 const char string19[] PROGMEM = "dotimes";
 const char string20[] PROGMEM = "for-millis";
 const char string23[] PROGMEM = "tail_forms";
@@ -1420,8 +1144,6 @@ const char string24[] PROGMEM = "progn";
 const char string25[] PROGMEM = "return";
 const char string26[] PROGMEM = "if";
 const char string27[] PROGMEM = "cond";
-const char string28[] PROGMEM = "when";
-const char string29[] PROGMEM = "unless";
 const char string30[] PROGMEM = "and";
 const char string31[] PROGMEM = "or";
 const char string32[] PROGMEM = "functions";
@@ -1434,22 +1156,10 @@ const char string38[] PROGMEM = "consp";
 const char string39[] PROGMEM = "numberp";
 const char string41[] PROGMEM = "eq";
 const char string42[] PROGMEM = "car";
-const char string43[] PROGMEM = "first";
 const char string44[] PROGMEM = "cdr";
-const char string45[] PROGMEM = "rest";
-const char string48[] PROGMEM = "second";
-const char string55[] PROGMEM = "third";
-const char string60[] PROGMEM = "length";
 const char string61[] PROGMEM = "list";
-const char string62[] PROGMEM = "reverse";
-const char string63[] PROGMEM = "nth";
-const char string64[] PROGMEM = "assoc";
-const char string65[] PROGMEM = "member";
 const char string66[] PROGMEM = "apply";
 const char string67[] PROGMEM = "funcall";
-const char string68[] PROGMEM = "append";
-const char string69[] PROGMEM = "mapc";
-const char string70[] PROGMEM = "mapcar";
 const char string71[] PROGMEM = "+";
 const char string72[] PROGMEM = "-";
 const char string73[] PROGMEM = "*";
@@ -1476,7 +1186,6 @@ const char string93[] PROGMEM = "logand";
 const char string94[] PROGMEM = "logior";
 const char string95[] PROGMEM = "logxor";
 const char string96[] PROGMEM = "lognot";
-const char string97[] PROGMEM = "ash";
 const char string98[] PROGMEM = "logbitp";
 const char string99[] PROGMEM = "read";
 const char string100[] PROGMEM = "eval";
@@ -1512,19 +1221,13 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string12, sp_loop, 0, 127 },
   { string13, sp_push, 2, 2 },
   { string14, sp_pop, 1, 1 },
-  { string15, sp_incf, 1, 2 },
-  { string16, sp_decf, 1, 2 },
   { string17, sp_setf, 2, 2 },
-  { string18, sp_dolist, 1, 127 },
   { string19, sp_dotimes, 1, 127 },
   { string20, sp_formillis, 1, 127 },
   { string23, NULL, NIL, NIL },
   { string24, tf_progn, 0, 127 },
   { string25, tf_return, 0, 127 },
-  { string26, tf_if, 2, 3 },
   { string27, tf_cond, 0, 127 },
-  { string28, tf_when, 1, 127 },
-  { string29, tf_unless, 1, 127 },
   { string30, tf_and, 0, 127 },
   { string31, tf_or, 0, 127 },
   { string32, NULL, NIL, NIL },
@@ -1537,20 +1240,10 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string39, fn_numberp, 1, 1 },
   { string41, fn_eq, 2, 2 },
   { string42, fn_car, 1, 1 },
-  { string43, fn_car, 1, 1 },
   { string44, fn_cdr, 1, 1 },
-  { string45, fn_cdr, 1, 1 },
-  { string60, fn_length, 1, 1 },
   { string61, fn_list, 0, 127 },
-  { string62, fn_reverse, 1, 1 },
-  { string63, fn_nth, 2, 2 },
-  { string64, fn_assoc, 2, 2 },
-  { string65, fn_member, 2, 2 },
   { string66, fn_apply, 2, 127 },
   { string67, fn_funcall, 1, 127 },
-  { string68, fn_append, 0, 127 },
-  { string69, fn_mapc, 2, 3 },
-  { string70, fn_mapcar, 2, 3 },
   { string71, fn_add, 0, 127 },
   { string72, fn_subtract, 1, 127 },
   { string73, fn_multiply, 0, 127 },
@@ -1564,10 +1257,7 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string81, fn_min, 1, 127 },
   { string82, fn_numeq, 1, 127 },
   { string83, fn_less, 1, 127 },
-  { string84, fn_lesseq, 1, 127 },
   { string85, fn_greater, 1, 127 },
-  { string86, fn_greatereq, 1, 127 },
-  { string87, fn_noteq, 1, 127 },
   { string88, fn_plusp, 1, 1 },
   { string89, fn_minusp, 1, 1 },
   { string90, fn_zerop, 1, 1 },
@@ -1577,7 +1267,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string94, fn_logior, 0, 127 },
   { string95, fn_logxor, 0, 127 },
   { string96, fn_lognot, 1, 1 },
-  { string97, fn_ash, 2, 2 },
   { string98, fn_logbitp, 2, 2 },
   { string99, fn_read, 0, 0 },
   { string100, fn_eval, 1, 1 },
