@@ -98,7 +98,6 @@ extern uint8_t _end;
 object *GlobalEnv;
 object *GCStack = NULL;
 char buffer[buflen+1];
-char BreakLevel = 0;
 char LastChar = 0;
 
 // Forward references
@@ -946,16 +945,6 @@ object *fn_makunbound (object *args, object *env) {
   return nil;
 }
 
-object *fn_break (object *args, object *env) {
-  (void) args;
-  Serial.println();
-  Serial.println(F("Break!"));
-  BreakLevel++;
-  repl(env);
-  BreakLevel--;
-  return nil;
-}
-
 object *fn_print (object *args, object *env) {
   (void) env;
   Serial.println();
@@ -1192,7 +1181,6 @@ const char string100[] PROGMEM = "eval";
 const char string101[] PROGMEM = "globals";
 const char string102[] PROGMEM = "locals";
 const char string103[] PROGMEM = "makunbound";
-const char string104[] PROGMEM = "break";
 const char string105[] PROGMEM = "print";
 const char string106[] PROGMEM = "princ";
 const char string110[] PROGMEM = "gc";
@@ -1273,7 +1261,6 @@ const tbl_entry_t lookup_table[] PROGMEM = {
   { string101, fn_globals, 0, 0 },
   { string102, fn_locals, 0, 0 },
   { string103, fn_makunbound, 1, 1 },
-  { string104, fn_break, 0, 0 },
   { string105, fn_print, 1, 1 },
   { string106, fn_princ, 1, 1 },
   { string110, fn_gc, 0, 0 },
@@ -1324,8 +1311,6 @@ object *eval (object *form, object *env) {
   // Enough space?
   if (freespace < 20) gc(form, env);
   if (_end != 0xA5) error(F("Stack overflow"));
-  // Break
-  if (Serial.read() == '~') error(F("Break!"));
   
   if (form == NULL) return nil;
 
@@ -1596,13 +1581,8 @@ void repl(object *env) {
     randomSeed(micros());
     gc(NULL, env);
     Serial.print(freespace);
-    if (BreakLevel) {
-      Serial.print(F(" : "));
-      Serial.print(BreakLevel);
-    }
     Serial.print(F("> "));
     object *line = read();
-    if (BreakLevel && line == nil) { Serial.println(); return; }
     Serial.println();
     if (line == (object *)KET) error(F("Unmatched right bracket"));
     push(line, GCStack);
