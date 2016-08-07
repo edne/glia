@@ -1581,7 +1581,7 @@ void repl(object *env) {
     randomSeed(micros());
     gc(NULL, env);
     Serial.print(freespace);
-    Serial.print(F("> "));
+    Serial.print(F(" ~> "));
     object *line = read();
     Serial.println();
     if (line == (object *)KET) error(F("Unmatched right bracket"));

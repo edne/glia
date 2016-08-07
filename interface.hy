@@ -19,5 +19,28 @@
     (.join "")))
 
 
-(with-serial (fn [p]
-               (print (read-line p))))
+(defn read-until [port match]
+  (defn read-until* [text]
+    (if (.endswith text match)
+      text
+      (read-until* (+ text (read-char port)))))
+  (read-until* ""))
+
+
+(defn wait-prompt [port]
+  (let [[prompt " ~> "]]
+    (read-until port " ~> ")))
+
+
+(defn run-command [port command]
+  (wait-prompt port)
+  (.write port (bytes command "ascii"))
+  (read-line port))
+
+
+(with-serial (fn [port]
+               (run-command port "(+ 1 2)")
+               (print (read-line port))
+               (run-command port "(+ 4 2)")
+               (print (read-line port))
+               ))
