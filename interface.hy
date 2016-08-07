@@ -32,14 +32,20 @@
     (read-until port " ~> ")))
 
 
+(defn join-lines [text]
+  (.join " " (.split text "\n")))
+
+
 (defn run-command [port command]
   (wait-prompt port)
-  (.write port (bytes command "ascii"))
+  (.write port (-> command
+                 join-lines
+                 (bytes "ascii")))
   (read-line port))
 
 
 (with-serial (fn [port]
-               (run-command port "(+ 1 2)")
+               (run-command port "(+ 1\n2)")
                (print (read-line port))
                (run-command port "(+ 4 2)")
                (print (read-line port))
