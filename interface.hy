@@ -28,8 +28,7 @@
 
 
 (defn wait-prompt [port]
-  (let [[prompt " ~> "]]
-    (read-until port " ~> ")))
+  (read-until port " ~> "))
 
 
 (defn join-lines [text]
@@ -44,9 +43,19 @@
   (read-line port))
 
 
+(defn blink-led [port pin delay]
+  (run-command port (.format
+                      "(pinmode {} t)" pin))
+  (run-command port (.format
+                      "(defun blk ()
+                         (digitalwrite {} t)
+                         (delay {})
+                         (digitalwrite {} nil)
+                         (delay {})
+                         (blk))" pin delay pin delay))
+  (run-command port "(blk)"))
+
+
 (with-serial (fn [port]
-               (run-command port "(+ 1\n2)")
-               (print (read-line port))
-               (run-command port "(+ 4 2)")
-               (print (read-line port))
+               (blink-led port 13 500)
                ))
