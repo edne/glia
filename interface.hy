@@ -64,19 +64,48 @@
   (run-command port "(blk)"))
 
 
-(defn read-knob [port pin]
-  (run-command port (.format
-                      "(pinmode {} nil)" pin))
-  (run-command port (.format
-                      "(defun kn ()
-                         (print (analogread {}))
-                         (kn))" pin))
-  (run-command port "(kn)")
+(defn device-init-knobs [port]
+  (for [pin (range 7 22)]
+    (run-command port (.format
+                        "(pinmode {} nil)" pin))))
+
+
+(defn device-defun-print-knob [port]
+  (run-command port "(defun pkn (pin)
+                       (princ 'knb)
+                       (princ (- pin 14))
+                       (princ '=)
+                       (princ (analogread pin))
+                       (print '>))"))
+
+
+(defn device-defun-loop [port]
+  (let [[loop-body (->> (range 14 22)
+                     (map (fn [pin] (.format "(pkn {})"
+                                             pin)))
+                     (.join "\n"))]]
+
+    (run-command port (.format
+                        "(defun lop ()
+                           {}
+                           (lop))" loop-body))))
+
+
+(defn device-loop [port]
+  (run-command port "(lop)"))
+
+
+(defn read-knobs [port]
+  (device-init-knobs       port)
+  (device-defun-print-knob port)
+  (device-defun-loop       port)
+
+  (device-loop port)
   (for [line (read-lines port)]
     (print line)))
 
 
 (with-serial (fn [port]
                ;(blink-led port 13 500)
-               (read-knob port 14)
+               (read-knobs port)
                ))
