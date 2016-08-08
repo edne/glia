@@ -4,7 +4,10 @@
 
 (defn with-serial [body]
   (with [[port (serial.Serial "/dev/ttyUSB0" 9600)]]
-    (body port)))
+    (try
+      (body port)
+      (except [KeyboardInterrupt]
+        (print "\rKeyboard Iterrupt")))))
 
 
 (defn read-char [port]
@@ -31,16 +34,21 @@
   (read-until port " ~> "))
 
 
-(defn join-lines [text]
+(defn remove-newlines [text]
   (.join " " (.split text "\n")))
 
 
 (defn run-command [port command]
   (wait-prompt port)
   (.write port (-> command
-                 join-lines
+                 remove-newlines
                  (bytes "ascii")))
   (read-line port))
+
+
+(defn read-lines [port]
+  (while true  ;; TODO: special line to denote end-of-stream
+    (yield (read-line port))))
 
 
 (defn blink-led [port pin delay]
@@ -56,6 +64,19 @@
   (run-command port "(blk)"))
 
 
+(defn read-knob [port pin]
+  (run-command port (.format
+                      "(pinmode {} nil)" pin))
+  (run-command port (.format
+                      "(defun kn ()
+                         (print (analogread {}))
+                         (kn))" pin))
+  (run-command port "(kn)")
+  (for [line (read-lines port)]
+    (print line)))
+
+
 (with-serial (fn [port]
-               (blink-led port 13 500)
+               ;(blink-led port 13 500)
+               (read-knob port 14)
                ))
