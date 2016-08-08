@@ -38,11 +38,20 @@
   (.join " " (.split text "\n")))
 
 
+;; It doesn't work with strings and quotes!
+;; Use (quote ...) instead of '(...)
+(defn prettify [expr]
+  (-> expr
+    str
+    (.replace "'" "")
+    (.replace "None" "nil")))
+
+
 (defn run-command [port command]
   (wait-prompt port)
-  (.write port (-> command
-                 remove-newlines
-                 (bytes "ascii")))
+  (let [[command* (prettify command)]]
+    (print command*)
+    (.write port (bytes command* "ascii")))
   (read-line port))
 
 
@@ -52,47 +61,41 @@
 
 
 (defn blink-led [port pin delay]
-  (run-command port (.format
-                      "(pinmode {} t)" pin))
-  (run-command port (.format
-                      "(defun blk ()
-                         (digitalwrite {} t)
-                         (delay {})
-                         (digitalwrite {} nil)
-                         (delay {})
-                         (blk))" pin delay pin delay))
-  (run-command port "(blk)"))
+  (run-command port `(pinmode ~pin t))
+  (run-command port `(defun blk ()
+                       (digitalwrite ~pin t)
+                       (delay ~delay)
+                       (digitalwrite ~pin nil)
+                       (delay ~delay)
+                       (blk)))
+  (run-command port `(blk)))
 
 
 (defn device-init-knobs [port]
   (for [pin (range 7 22)]
-    (run-command port (.format
-                        "(pinmode {} nil)" pin))))
+    (run-command port `(pinmode ~pin nil))))
 
 
 (defn device-defun-print-knob [port]
-  (run-command port "(defun pkn (pin)
-                       (princ 'knb)
+  (run-command port `(defun pkn (pin)
+                       (princ (quote knb))
                        (princ (- pin 14))
-                       (princ '=)
+                       (princ (quote =))
                        (princ (analogread pin))
-                       (print '>))"))
+                       (print (quote >)))))
 
 
 (defn device-defun-loop [port]
-  (let [[loop-body (->> (range 14 22)
-                     (map (fn [pin] (.format "(pkn {})"
-                                             pin)))
-                     (.join "\n"))]]
+  (let [[loop-body (map (fn [pin] `(pkn ~pin))
+                     (range 14 22))]]
 
-    (run-command port (.format
-                        "(defun lop ()
-                           {}
-                           (lop))" loop-body))))
+    (run-command port `(defun lop ()
+                         ~@loop-body
+                         (lop)))))
 
 
 (defn device-loop [port]
-  (run-command port "(lop)"))
+  (run-command port `(lop)))
 
 
 (defn read-knobs [port]
