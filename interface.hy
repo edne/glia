@@ -56,11 +56,6 @@
   (read-line port))
 
 
-(defn read-lines [port]
-  (while true
-    (yield (read-line port))))
-
-
 (defn blink-led [port pin delay]
   (run-command port `(pinmode ~pin t))
   (run-command port `(defun blk ()
@@ -73,8 +68,8 @@
 
 
 (defn device-init-knobs [port]
-  (for [pin (range 7 22)]
-    (run-command port `(pinmode ~pin nil))))
+  (run-command port `(dotimes (kn 8)
+                       (pinmode (+ kn 14) nil))))
 
 
 (defn device-defun-print-knob [port]
@@ -87,16 +82,16 @@
                        )))
 
 
-(defn device-defun-loop [port]
-  (run-command port `(defun lop ()
-                       (dotimes (kn 7)
+(defn device-defun-get-data [port]
+  (run-command port `(defun gdt ()
+                       (dotimes (kn 8)
                          (pkn (+ kn 14)))
                        (print (quote eod))  ;; End Of Data
-                       (lop))))
+                       )))
 
 
-(defn device-loop [port]
-  (run-command port `(lop)))
+(defn device-get-data [port]
+  (run-command port `(gdt)))
 
 
 (defn parse-knob [line]
@@ -123,6 +118,7 @@
                         (if-not (in type (.keys d)) (assoc d type {}))
                         (assoc (get d type) id value))
                       d)]]
+    (device-get-data port)
     (->> (repeatedly read-line*)
       (take-while data?)
       (map parse-data)
@@ -130,19 +126,17 @@
       to-dict)))
 
 
-(defn read-knobs [port]
+(defn read-data-stream [port]
   (device-init-knobs       port)
   (device-defun-print-knob port)
-  (device-defun-loop       port)
+  (device-defun-get-data   port)
 
-  (device-loop port)
-  ;(for [line (read-lines port)]
-  ;  (print line))
-  (print (read-data port))
-  )
+  (repeatedly (fn [] (read-data port))))
 
 
 (with-serial (fn [port]
                ;(blink-led port 13 500)
-               (read-knobs port)
+               (->> (read-data-stream port)
+                 first
+                 print)
                ))
