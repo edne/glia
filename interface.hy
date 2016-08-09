@@ -1,5 +1,6 @@
 #!/usr/bin/env hy
 (import serial)
+(import re)
 
 
 (defn with-serial [body]
@@ -56,7 +57,7 @@
 
 
 (defn read-lines [port]
-  (while true  ;; TODO: special line to denote end-of-stream
+  (while true
     (yield (read-line port))))
 
 
@@ -78,24 +79,55 @@
 
 (defn device-defun-print-knob [port]
   (run-command port `(defun pkn (pin)
+                       (print (quote >))
                        (princ (quote knb))
                        (princ (- pin 14))
                        (princ (quote =))
                        (princ (analogread pin))
-                       (print (quote >)))))
+                       )))
 
 
 (defn device-defun-loop [port]
-  (let [[loop-body (map (fn [pin] `(pkn ~pin))
-                     (range 14 22))]]
-
-    (run-command port `(defun lop ()
-                         ~@loop-body
-                         (lop)))))
+  (run-command port `(defun lop ()
+                       (dotimes (kn 7)
+                         (pkn (+ kn 14)))
+                       (print (quote eod))  ;; End Of Data
+                       (lop))))
 
 
 (defn device-loop [port]
   (run-command port `(lop)))
+
+
+(defn parse-knob [line]
+  (let [[extract (fn [pattern]
+                   (-> (re.search pattern line) .groups first int))]
+        [number (extract "knb(.+)=")]
+        [value  (extract "=(.+)\r")]]
+    [number value]))
+
+
+(defn parse-data [line]
+  (cond
+    [(in "knb" line) ["knob" (parse-knob line)]]
+    [true nil]  ;; filtered away
+    ))
+
+
+(defn read-data [port]
+  (let [[read-line* (fn [] (read-line port))]
+        [data?      (fn [line] (not (.startswith line "eod")))]
+        [to-dict    (fn [data]  ;; assoc is not pure
+                      (setv d {})
+                      (for [[type [id value]] data]
+                        (if-not (in type (.keys d)) (assoc d type {}))
+                        (assoc (get d type) id value))
+                      d)]]
+    (->> (repeatedly read-line*)
+      (take-while data?)
+      (map parse-data)
+      (filter identity)  ;; empty or invalid lines
+      to-dict)))
 
 
 (defn read-knobs [port]
@@ -104,8 +136,10 @@
   (device-defun-loop       port)
 
   (device-loop port)
-  (for [line (read-lines port)]
-    (print line)))
+  ;(for [line (read-lines port)]
+  ;  (print line))
+  (print (read-data port))
+  )
 
 
 (with-serial (fn [port]
