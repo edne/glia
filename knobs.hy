@@ -4,31 +4,31 @@
 (import re)
 
 
-(defn device-init-knobs [port]
-  (run port `(dotimes (kn 8)
-               (pinmode (+ kn 14) nil))))
+(defn init-knobs [device]
+  (run device `(dotimes (kn 8)
+                 (pinmode (+ kn 14) nil))))
 
 
-(defn device-defun-print-knob [port]
-  (run port `(defun pkn (pin)
-               (print (quote >))
-               (princ (quote knb))
-               (princ (- pin 14))
-               (princ (quote =))
-               (princ (analogread pin))
-               )))
+(defn defun-print-knob [device]
+  (run device `(defun pkn (pin)
+                 (print (quote >))
+                 (princ (quote knb))
+                 (princ (- pin 14))
+                 (princ (quote =))
+                 (princ (analogread pin))
+                 )))
 
 
-(defn device-defun-get-data [port]
-  (run port `(defun gdt ()
-               (dotimes (kn 8)
-                 (pkn (+ kn 14)))
-               (print (quote eod))  ;; End Of Data
-               )))
+(defn defun-get-data [device]
+  (run device `(defun gdt ()
+                 (dotimes (kn 8)
+                   (pkn (+ kn 14)))
+                 (print (quote eod))  ;; End Of Data
+                 )))
 
 
-(defn device-get-data [port]
-  (run port `(gdt)))
+(defn get-data [device]
+  (run device `(gdt)))
 
 
 (defn parse-knob [line]
@@ -46,8 +46,8 @@
     ))
 
 
-(defn read-data [port]
-  (let [[read-line* (fn [] (read-line port))]
+(defn read-data [device]
+  (let [[read-line* (fn [] (read-line device))]
         [data?      (fn [line] (not (.startswith line "eod")))]
         [to-dict    (fn [data]  ;; assoc is not pure
                       (setv d {})
@@ -55,7 +55,7 @@
                         (if-not (in type (.keys d)) (assoc d type {}))
                         (assoc (get d type) id value))
                       d)]]
-    (device-get-data port)
+    (get-data device)
     (->> (repeatedly read-line*)
       (take-while data?)
       (map parse-data)
@@ -64,23 +64,23 @@
       )))
 
 
-(defn init-data-stream [port]
-  (device-init-knobs       port)
-  (device-defun-print-knob port)
-  (device-defun-get-data   port))
+(defn init-data-stream [device]
+  (init-knobs       device)
+  (defun-print-knob device)
+  (defun-get-data   device))
 
 
-(defn read-data-stream [port]
-  (repeatedly (fn [] (read-data port))))
+(defn read-data-stream [device]
+  (repeatedly (fn [] (read-data device))))
 
 
 (to-osc "localhost:7172"
         (fn [addr]
           (on-serial "/dev/ttyUSB0"
-                     (fn [port]
-                       (init-data-stream port)
+                     (fn [device]
+                       (init-data-stream device)
                        (while true
-                         (let [[data  (first (read-data-stream port))]]
+                         (let [[data  (first (read-data-stream device))]]
                            (for [[type [id value]] data]
                              (send addr
                                    (.format "controller/{}{}" type id)

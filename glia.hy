@@ -6,35 +6,35 @@
 ;; uLisp and serial
 
 (defn on-serial [path body]
-  (with [[port (serial.Serial path 9600)]]
+  (with [[device (serial.Serial path 9600)]]
     (try
-      (body port)
+      (body device)
       (except [KeyboardInterrupt]
         (print "\rKeyboard Iterrupt")))))
 
 
-(defn read-char [port]
-  (-> port
+(defn read-char [device]
+  (-> device
     .read
     (.decode "ascii")))
 
 
-(defn read-line [port]
-  (->> (repeatedly (fn [] (read-char port)))
+(defn read-line [device]
+  (->> (repeatedly (fn [] (read-char device)))
     (take-while (fn [c] (!= c "\n")))
     (.join "")))
 
 
-(defn read-until [port match]
+(defn read-until [device match]
   (defn read-until* [text]
     (if (.endswith text match)
       text
-      (read-until* (+ text (read-char port)))))
+      (read-until* (+ text (read-char device)))))
   (read-until* ""))
 
 
-(defn wait-prompt [port]
-  (read-until port " ~> "))
+(defn wait-prompt [device]
+  (read-until device " ~> "))
 
 
 ;; It doesn't work with strings and quotes!
@@ -46,12 +46,12 @@
     (.replace "None" "nil")))
 
 
-(defn run [port command]
-  (wait-prompt port)
+(defn run [device command]
+  (wait-prompt device)
   (let [[command* (prettify command)]]
     ;(print command*)
-    (.write port (bytes command* "ascii")))
-  (read-line port))
+    (.write device (bytes command* "ascii")))
+  (read-line device))
 
 
 ;; OSC
