@@ -1,18 +1,19 @@
 #!/usr/bin/env hy
-(import [glia [with-serial run-command]])
+(import [glia [on-serial run]])
 
 
 (defn blink-led [port pin delay]
-  (run-command port `(pinmode ~pin t))
-  (run-command port `(defun blk ()
-                       (digitalwrite ~pin t)
-                       (delay ~delay)
-                       (digitalwrite ~pin nil)
-                       (delay ~delay)
-                       (blk)))
-  (run-command port `(blk)))
+  (run port `(pinmode ~pin t))
+  (run port `(defun blk ()
+               (digitalwrite ~pin t)
+               (delay ~delay)
+               (digitalwrite ~pin nil)
+               (delay ~delay)
+               (blk)))
+  (run port `(blk)))
 
 
-(with-serial (fn [port]
+(on-serial "/dev/ttyUSB0"
+             (fn [port]
                (blink-led port 13 500)
                ))

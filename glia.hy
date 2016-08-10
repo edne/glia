@@ -2,8 +2,8 @@
 (import serial)
 
 
-(defn with-serial [body]
-  (with [[port (serial.Serial "/dev/ttyUSB0" 9600)]]
+(defn on-serial [path body]
+  (with [[port (serial.Serial path 9600)]]
     (try
       (body port)
       (except [KeyboardInterrupt]
@@ -43,9 +43,15 @@
     (.replace "None" "nil")))
 
 
-(defn run-command [port command]
+(defn run [port command]
   (wait-prompt port)
   (let [[command* (prettify command)]]
     (print command*)
     (.write port (bytes command* "ascii")))
   (read-line port))
+
+
+(defn device-defn [port body]
+  (let [[name (first body)]]
+    (run port (cons 'defun body))
+    (fn [&rest args] (run port `(~name ~@args)))))

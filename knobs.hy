@@ -1,33 +1,33 @@
 #!/usr/bin/env hy
-(import [glia [with-serial run-command read-line]])
+(import [glia [on-serial run read-line]])
 (import re)
 
 
 (defn device-init-knobs [port]
-  (run-command port `(dotimes (kn 8)
-                       (pinmode (+ kn 14) nil))))
+  (run port `(dotimes (kn 8)
+               (pinmode (+ kn 14) nil))))
 
 
 (defn device-defun-print-knob [port]
-  (run-command port `(defun pkn (pin)
-                       (print (quote >))
-                       (princ (quote knb))
-                       (princ (- pin 14))
-                       (princ (quote =))
-                       (princ (analogread pin))
-                       )))
+  (run port `(defun pkn (pin)
+               (print (quote >))
+               (princ (quote knb))
+               (princ (- pin 14))
+               (princ (quote =))
+               (princ (analogread pin))
+               )))
 
 
 (defn device-defun-get-data [port]
-  (run-command port `(defun gdt ()
-                       (dotimes (kn 8)
-                         (pkn (+ kn 14)))
-                       (print (quote eod))  ;; End Of Data
-                       )))
+  (run port `(defun gdt ()
+               (dotimes (kn 8)
+                 (pkn (+ kn 14)))
+               (print (quote eod))  ;; End Of Data
+               )))
 
 
 (defn device-get-data [port]
-  (run-command port `(gdt)))
+  (run port `(gdt)))
 
 
 (defn parse-knob [line]
@@ -70,8 +70,9 @@
   (repeatedly (fn [] (read-data port))))
 
 
-(with-serial (fn [port]
-               (->> (read-data-stream port)
-                 first
-                 print)
-               ))
+(on-serial "/dev/ttyUSB0"
+           (fn [port]
+             (->> (read-data-stream port)
+               first
+               print)
+             ))
