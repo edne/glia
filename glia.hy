@@ -1,6 +1,9 @@
 #!/usr/bin/env hy
 (import serial)
+(import liblo)
 
+
+;; uLisp and serial
 
 (defn on-serial [path body]
   (with [[port (serial.Serial path 9600)]]
@@ -46,12 +49,19 @@
 (defn run [port command]
   (wait-prompt port)
   (let [[command* (prettify command)]]
-    (print command*)
+    ;(print command*)
     (.write port (bytes command* "ascii")))
   (read-line port))
 
 
-(defn device-defn [port body]
-  (let [[name (first body)]]
-    (run port (cons 'defun body))
-    (fn [&rest args] (run port `(~name ~@args)))))
+;; OSC
+
+(defn to-osc [ip-port body]
+  (let [[addr (->> ip-port
+                (.format "osc.udp://{}")
+                liblo.Address)]]
+    (body addr)))
+
+
+(defn send [addr path value]
+  (liblo.send addr path value))

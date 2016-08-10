@@ -1,5 +1,6 @@
 #!/usr/bin/env hy
 (import [glia [on-serial run read-line]])
+(import [glia [to-osc send]])
 (import re)
 
 
@@ -59,7 +60,8 @@
       (take-while data?)
       (map parse-data)
       (filter identity)  ;; empty or invalid lines
-      to-dict)))
+      ;to-dict
+      )))
 
 
 (defn init-data-stream [port]
@@ -72,11 +74,14 @@
   (repeatedly (fn [] (read-data port))))
 
 
-(on-serial "/dev/ttyUSB0"
-           (fn [port]
-             (init-data-stream port)
-             (while true
-               (->> (read-data-stream port)
-                 first
-                 print))
-             ))
+(to-osc "localhost:7172"
+        (fn [addr]
+          (on-serial "/dev/ttyUSB0"
+                     (fn [port]
+                       (init-data-stream port)
+                       (while true
+                         (let [[data  (first (read-data-stream port))]]
+                           (for [[type [id value]] data]
+                             (send addr
+                                   (.format "controller/{}{}" type id)
+                                   (/ value 1023)))))))))
