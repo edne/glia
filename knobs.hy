@@ -62,17 +62,21 @@
       to-dict)))
 
 
-(defn read-data-stream [port]
+(defn init-data-stream [port]
   (device-init-knobs       port)
   (device-defun-print-knob port)
-  (device-defun-get-data   port)
+  (device-defun-get-data   port))
 
+
+(defn read-data-stream [port]
   (repeatedly (fn [] (read-data port))))
 
 
 (on-serial "/dev/ttyUSB0"
            (fn [port]
-             (->> (read-data-stream port)
-               first
-               print)
+             (init-data-stream port)
+             (while true
+               (->> (read-data-stream port)
+                 first
+                 print))
              ))
