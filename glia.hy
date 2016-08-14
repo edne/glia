@@ -59,12 +59,27 @@
 (def -pins-io-status- {})
 
 
+(defn set-pin-io-status [device pin status]
+  (let [[opposite-status
+          (cond [[(= status "in")  "out"]
+                 [(= status "out") "in"]])]]
+    (when (or
+            (not (in pin -pins-io-status-))
+            (= (get -pins-io-status- pin) opposite-status))
+      (assoc -pins-io-status- pin status)
+      (cond
+        [(= status "in")  (run device `(pinmode ~pin nil))]
+        [(= status "out") (run device `(pinmode ~pin t))]))))
+
+
+(defn write-digital [device pin bit]
+  (set-pin-io-status device pin "out")
+  (let [[bit* (if bit 't 'nil)]]
+    (run device `(digitalwrite ~pin ~bit*))))
+
+
 (defn read-analog [device pin]
-  (when (or
-          (not (in pin -pins-io-status-))
-          (= (get -pins-io-status- pin) "out"))
-    (run device `(pinmode ~pin nil))
-    (assoc -pins-io-status- pin "in"))
+  (set-pin-io-status device pin "in")
 
   (run device `(print (analogread ~pin)))
   (read-line device)      ; empty line
