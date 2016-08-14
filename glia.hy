@@ -6,11 +6,13 @@
 ;; uLisp and serial
 
 (defn on-serial [path body]
-  (with [[device (serial.Serial path 9600)]]
-    (try
-      (body device)
-      (except [KeyboardInterrupt]
-        (print "\rKeyboard Iterrupt")))))
+  (try
+    (with [[device (serial.Serial path 9600)]]
+      (body device))
+    (except [KeyboardInterrupt]
+      (print "\rKeyboard Iterrupt"))
+    (except [serial.serialutil.SerialException]
+      (print "Serial port not found"))))
 
 
 (defn read-char [device]
